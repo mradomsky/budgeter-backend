@@ -125,6 +125,14 @@ public class FinanzguruImportService {
             Map.entry("Kindergeld", IncomeCategory.GOVERNMENT_BENEFITS),
             Map.entry("Mieteinnahmen", IncomeCategory.RENTAL));
 
+    static {
+        // Finanzguru exports contain a highly compressible styles.xml that trips POI's default
+        // zip-bomb detection threshold (ratio < 0.01). Lower it once at class load rather than
+        // mutating this process-wide setting on every request. Inputs are bounded by the
+        // multipart max-file-size (10MB) configured in application.properties.
+        ZipSecureFile.setMinInflateRatio(0.001);
+    }
+
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
 
@@ -134,10 +142,6 @@ public class FinanzguruImportService {
 
         ImportResult result = ImportResult.builder().build();
         DataFormatter formatter = new DataFormatter();
-
-        // Finanzguru exports contain a highly compressible styles.xml that trips POI's default
-        // zip-bomb detection threshold (ratio < 0.01)
-        ZipSecureFile.setMinInflateRatio(0.001);
 
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -198,6 +202,10 @@ public class FinanzguruImportService {
         }
 
         String externalId = stringValue(row, columns.get(COL_BOOKING_ID), formatter);
+        if (externalId == null) {
+            // Buchungs-ID is the dedup key; without it idempotency is impossible
+            throw new IllegalArgumentException("Missing Buchungs-ID for row");
+        }
         String subCategory = stringValue(row, columns.get(COL_SUB_CATEGORY), formatter);
         String counterparty = stringValue(row, columns.get(COL_COUNTERPARTY), formatter);
         String purpose = stringValue(row, columns.get(COL_PURPOSE), formatter);
@@ -209,7 +217,7 @@ public class FinanzguruImportService {
         String description = truncate(purpose, 200);
 
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            if (externalId != null && expenseRepository.existsByExternalId(externalId)) {
+            if (expenseRepository.existsByExternalId(externalId)) {
                 result.incrementSkippedDuplicates();
                 return;
             }
@@ -224,7 +232,7 @@ public class FinanzguruImportService {
                     .build();
             expenseRepository.save(expense);
         } else {
-            if (externalId != null && incomeRepository.existsByExternalId(externalId)) {
+            if (incomeRepository.existsByExternalId(externalId)) {
                 result.incrementSkippedDuplicates();
                 return;
             }

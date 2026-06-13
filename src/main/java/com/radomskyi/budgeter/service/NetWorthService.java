@@ -62,8 +62,12 @@ public class NetWorthService implements NetWorthServiceInterface {
     }
 
     private NetWorthPosition toPosition(Investment investment) {
+        // Trade Republic securities are ISIN-only; fall back to ISIN so clients always have an id
+        String ticker = investment.getAsset().getTicker() != null
+                ? investment.getAsset().getTicker()
+                : investment.getAsset().getIsin();
         return NetWorthPosition.builder()
-                .ticker(investment.getAsset().getTicker())
+                .ticker(ticker)
                 .name(investment.getAsset().getName())
                 .isin(investment.getAsset().getIsin())
                 .assetType(investment.getAsset().getAssetType())

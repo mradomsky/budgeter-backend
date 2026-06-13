@@ -137,6 +137,7 @@ class InvestmentTransactionTest {
         assertThat(Currency.valueOf("GBP")).isEqualTo(Currency.GBP);
         assertThat(Currency.valueOf("GBX")).isEqualTo(Currency.GBX);
         assertThat(Currency.valueOf("CHF")).isEqualTo(Currency.CHF);
+        assertThat(Currency.valueOf("CAD")).isEqualTo(Currency.CAD);
     }
 
     @Test

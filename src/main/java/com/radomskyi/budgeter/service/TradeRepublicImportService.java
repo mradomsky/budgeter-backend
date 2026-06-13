@@ -122,7 +122,11 @@ public class TradeRepublicImportService {
         }
 
         String externalId = value(row, columns, COL_TRANSACTION_ID);
-        if (externalId != null && investmentTransactionRepository.existsByExternalId(externalId)) {
+        if (externalId == null) {
+            // transaction_id is the dedup key; without it idempotency is impossible
+            throw new IllegalArgumentException("Missing transaction_id for trade: " + value(row, columns, COL_NAME));
+        }
+        if (investmentTransactionRepository.existsByExternalId(externalId)) {
             result.incrementSkippedDuplicates();
             return;
         }

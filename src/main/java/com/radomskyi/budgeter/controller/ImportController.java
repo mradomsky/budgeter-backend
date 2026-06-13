@@ -1,10 +1,12 @@
 package com.radomskyi.budgeter.controller;
 
+import com.opencsv.exceptions.CsvException;
 import com.radomskyi.budgeter.domain.controller.ImportControllerInterface;
 import com.radomskyi.budgeter.dto.ImportResult;
 import com.radomskyi.budgeter.service.FinanzguruImportService;
 import com.radomskyi.budgeter.service.TradeRepublicImportService;
 import com.radomskyi.budgeter.service.Trading212ImportService;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -52,7 +54,8 @@ public class ImportController implements ImportControllerInterface {
             log.info(message);
             return ResponseEntity.ok(message);
 
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | IOException | CsvException e) {
+            // Bad/malformed upload (empty file, wrong format, unparseable CSV) — client error
             String errorMessage = "Failed to import " + source + " file: " + e.getMessage();
             log.error(errorMessage, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
