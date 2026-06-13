@@ -131,9 +131,12 @@ class InvestmentTransactionTest {
 
     @Test
     void testCurrencyEnum() {
-        assertThat(Currency.values()).hasSize(2);
+        assertThat(Currency.values()).hasSize(6);
         assertThat(Currency.valueOf("USD")).isEqualTo(Currency.USD);
         assertThat(Currency.valueOf("EUR")).isEqualTo(Currency.EUR);
+        assertThat(Currency.valueOf("GBP")).isEqualTo(Currency.GBP);
+        assertThat(Currency.valueOf("GBX")).isEqualTo(Currency.GBX);
+        assertThat(Currency.valueOf("CHF")).isEqualTo(Currency.CHF);
     }
 
     @Test

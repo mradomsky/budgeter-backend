@@ -8,5 +8,17 @@ public enum Currency {
     USD,
 
     @Schema(description = "Euro")
-    EUR
+    EUR,
+
+    @Schema(description = "British Pound")
+    GBP,
+
+    @Schema(description = "British Penny Sterling (used by LSE-listed instruments)")
+    GBX,
+
+    @Schema(description = "Swiss Franc")
+    CHF,
+
+    @Schema(description = "Canadian Dollar")
+    CAD
 }

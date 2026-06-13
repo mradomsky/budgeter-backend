@@ -14,6 +14,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface InvestmentTransactionRepository extends JpaRepository<InvestmentTransaction, Long> {
 
+    // Check whether a transaction from a source system was already imported
+    boolean existsByExternalId(String externalId);
+
     // Find all transactions for a specific investment
     List<InvestmentTransaction> findByInvestment(Investment investment);
 

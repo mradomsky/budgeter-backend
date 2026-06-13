@@ -52,6 +52,12 @@ public class Investment {
     @Column(name = "latest_price", precision = 15, scale = 8)
     private BigDecimal latestPrice;
 
+    // EUR per one unit of the instrument currency at the time of the latest trade —
+    // multiply latestPrice by this to get an EUR price. Null when the price is already in EUR.
+    @DecimalMin(value = "0.00000001")
+    @Column(name = "latest_exchange_rate", precision = 15, scale = 8)
+    private BigDecimal latestExchangeRate;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "currency", nullable = false, length = 3)
@@ -137,16 +143,45 @@ public class Investment {
             // Set the realized gain/loss on the transaction
             transaction.setRealizedGainLoss(transactionGainLoss);
 
-            // Update totals
+            // Update totals. Imports may cover a partial time window (sells of units bought
+            // before the window), so clamp at zero instead of violating the non-negative invariants
             totalUnits = totalUnits.subtract(transaction.getUnits());
             totalCost = totalCost.subtract(costOfSoldUnits);
+            if (totalUnits.compareTo(BigDecimal.ZERO) < 0) {
+                totalUnits = BigDecimal.ZERO;
+            }
+            if (totalCost.compareTo(BigDecimal.ZERO) < 0) {
+                totalCost = BigDecimal.ZERO;
+            }
         }
 
         // Update cost basis
         updateCostBasis();
 
-        // Update latest price from the transaction
-        this.latestPrice = transaction.getPricePerUnit();
+        // Update latest price from the transaction — but not for dividends, where
+        // pricePerUnit is the payout per share, not the market price
+        if (transaction.getTransactionType() == InvestmentTransactionType.BUY
+                || transaction.getTransactionType() == InvestmentTransactionType.SELL) {
+            this.latestPrice = transaction.getPricePerUnit();
+            this.latestExchangeRate = transaction.getExchangeRate();
+        }
+    }
+
+    /**
+     * Current market value in EUR: totalUnits × latestPrice × latestExchangeRate.
+     * Falls back to totalCost when no price is known yet.
+     *
+     * @return The current value of this investment in EUR
+     */
+    public BigDecimal getCurrentValueEur() {
+        if (latestPrice == null || totalUnits == null) {
+            return totalCost != null ? totalCost : BigDecimal.ZERO;
+        }
+        BigDecimal value = totalUnits.multiply(latestPrice);
+        if (latestExchangeRate != null) {
+            value = value.multiply(latestExchangeRate);
+        }
+        return value.setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     /**

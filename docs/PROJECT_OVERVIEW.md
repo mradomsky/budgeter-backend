@@ -9,8 +9,9 @@ A personal finance REST API for **Maksym Radomskyi**. Tracks:
 
 - **Expenses** — categorized spending records with optional tags
 - **Income** — categorized income records
-- **Investments** — portfolio of assets (stocks, ETFs, etc.) with full transaction history and cost-basis tracking
-- **CSV Import** — bulk import of investment transactions from Trading 212 CSV exports
+- **Investments** — portfolio of assets (stocks, ETFs, crypto, etc.) with full transaction history and cost-basis tracking
+- **Imports** — idempotent bulk import from Trading 212 (CSV), Trade Republic (CSV), and Finanzguru (XLSX) exports
+- **Net worth** — aggregated portfolio value by brokerage and asset type
 
 The API is consumed by a personal budgeting frontend. Swagger UI is available at `/swagger-ui.html` when running locally.
 
@@ -26,7 +27,8 @@ The API is consumed by a personal budgeting frontend. Swagger UI is available at
 | Code Gen    | **Lombok**                               | `@Data`, `@Builder`, `@Slf4j`, `@RequiredArgsConstructor` |
 | Formatting  | **Spotless + Palantir Java Format**      | Enforced at `validate` phase in Maven                    |
 | Testing     | **JUnit 5 + Mockito + Spring Boot Test** | H2 for integration tests                                 |
-| CSV         | **OpenCSV 5.9**                          | Trading 212 import                                       |
+| CSV         | **OpenCSV 5.9**                          | Trading 212 + Trade Republic import                      |
+| XLSX        | **Apache POI 5.3.0**                     | Finanzguru import                                        |
 | Monitoring  | **Spring Actuator**                      | `/actuator/health`, `/actuator/metrics`, `/actuator/prometheus` |
 
 ## Package Structure
@@ -38,14 +40,16 @@ src/main/java/com/radomskyi/budgeter/
 ├── controller/                       # @RestController implementations
 │   ├── ExpenseController.java        # /api/expense
 │   ├── IncomeController.java         # /api/income
-│   └── ImportController.java         # /api/import
+│   ├── ImportController.java         # /api/import/{trading212,traderepublic,finanzguru}
+│   └── NetWorthController.java       # /api/net-worth
 │
 ├── domain/                           # Domain model (interfaces + entities)
 │   ├── controller/                   # Controller interfaces (Swagger annotations here)
 │   │   ├── BaseController.java       # Generic CRUD interface (create, getById, getAll, update, delete)
 │   │   ├── ExpenseControllerInterface.java
 │   │   ├── IncomeControllerInterface.java
-│   │   └── ImportControllerInterface.java
+│   │   ├── ImportControllerInterface.java
+│   │   └── NetWorthControllerInterface.java
 │   ├── entity/
 │   │   ├── budgeting/                # Expense, Income, Transaction (base), Tag, *Category enums
 │   │   └── investment/               # Asset, Investment, InvestmentTransaction, enums
@@ -53,7 +57,8 @@ src/main/java/com/radomskyi/budgeter/
 │       ├── BaseService.java
 │       ├── ExpenseServiceInterface.java
 │       ├── IncomeServiceInterface.java
-│       └── InvestmentServiceInterface.java
+│       ├── InvestmentServiceInterface.java
+│       └── NetWorthServiceInterface.java
 │
 ├── dto/                              # Request/response DTOs
 │   ├── ExpenseRequest.java
@@ -61,7 +66,10 @@ src/main/java/com/radomskyi/budgeter/
 │   ├── IncomeRequest.java
 │   ├── IncomeResponse.java
 │   ├── InvestmentTransactionRequest.java
-│   └── InvestmentTransactionResponse.java
+│   ├── InvestmentTransactionResponse.java
+│   ├── ImportResult.java
+│   ├── NetWorthPosition.java
+│   └── NetWorthResponse.java
 │
 ├── exception/                        # Domain exceptions + global handler
 │   ├── ExpenseNotFoundException.java
@@ -80,7 +88,10 @@ src/main/java/com/radomskyi/budgeter/
     ├── ExpenseService.java
     ├── IncomeService.java
     ├── InvestmentService.java
-    └── Trading212CsvImportService.java
+    ├── NetWorthService.java
+    ├── Trading212ImportService.java
+    ├── TradeRepublicImportService.java
+    └── FinanzguruImportService.java
 ```
 
 ## REST Endpoints Summary
@@ -97,7 +108,10 @@ src/main/java/com/radomskyi/budgeter/
 | GET    | `/api/income?page=&size=`     | List income (paginated)                  |
 | PUT    | `/api/income/{id}`            | Update income                            |
 | DELETE | `/api/income/{id}`            | Delete income                            |
-| POST   | `/api/import/trading212`      | Upload Trading 212 CSV                   |
+| POST   | `/api/import/trading212`      | Import Trading 212 transactions CSV      |
+| POST   | `/api/import/traderepublic`   | Import Trade Republic transactions CSV   |
+| POST   | `/api/import/finanzguru`      | Import Finanzguru "Alle Buchungen" XLSX  |
+| GET    | `/api/net-worth`              | Aggregated portfolio value               |
 
 See [docs/API.md](API.md) for full request/response schemas.
 

@@ -1,0 +1,107 @@
+package com.radomskyi.budgeter.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+import com.radomskyi.budgeter.domain.entity.investment.Asset;
+import com.radomskyi.budgeter.domain.entity.investment.AssetType;
+import com.radomskyi.budgeter.domain.entity.investment.Currency;
+import com.radomskyi.budgeter.domain.entity.investment.Investment;
+import com.radomskyi.budgeter.domain.entity.investment.InvestmentStyle;
+import com.radomskyi.budgeter.dto.NetWorthResponse;
+import com.radomskyi.budgeter.repository.InvestmentRepository;
+import java.math.BigDecimal;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class NetWorthServiceTest {
+
+    @Mock
+    private InvestmentRepository investmentRepository;
+
+    @InjectMocks
+    private NetWorthService netWorthService;
+
+    private Investment investment(
+            String ticker,
+            AssetType assetType,
+            String brokerage,
+            String units,
+            String latestPrice,
+            String latestExchangeRate,
+            Currency currency) {
+        Asset asset = Asset.builder()
+                .ticker(ticker)
+                .name(ticker + " asset")
+                .assetType(assetType)
+                .investmentStyle(InvestmentStyle.GROWTH)
+                .build();
+        return Investment.builder()
+                .asset(asset)
+                .totalUnits(new BigDecimal(units))
+                .totalCost(BigDecimal.TEN)
+                .costBasis(BigDecimal.ONE)
+                .latestPrice(latestPrice != null ? new BigDecimal(latestPrice) : null)
+                .latestExchangeRate(latestExchangeRate != null ? new BigDecimal(latestExchangeRate) : null)
+                .currency(currency)
+                .brokerage(brokerage)
+                .build();
+    }
+
+    @Test
+    void getNetWorth_ShouldAggregateByBrokerageAndAssetType_WhenMultiplePositionsExist() {
+        when(investmentRepository.findAll())
+                .thenReturn(List.of(
+                        // 10 × 100 EUR = 1000 EUR
+                        investment("VWCE", AssetType.INDEX_ETF, "Trading212", "10", "100.00", null, Currency.EUR),
+                        // 2 × 50 USD × 0.85 = 85 EUR
+                        investment("AAPL", AssetType.STOCK, "Trading212", "2", "50.00", "0.85", Currency.USD),
+                        // 0.5 × 200 EUR = 100 EUR
+                        investment("BTC", AssetType.CRYPTO, "TradeRepublic", "0.5", "200.00", null, Currency.EUR),
+                        // Closed position — must be excluded
+                        investment("SOLD", AssetType.STOCK, "TradeRepublic", "0", "999.00", null, Currency.EUR)));
+
+        NetWorthResponse response = netWorthService.getNetWorth();
+
+        assertThat(response.getTotalValue()).isEqualByComparingTo(new BigDecimal("1185.00"));
+        assertThat(response.getCurrency()).isEqualTo("EUR");
+        assertThat(response.getPositions()).hasSize(3);
+
+        assertThat(response.getByBrokerage().get("Trading212")).isEqualByComparingTo(new BigDecimal("1085.00"));
+        assertThat(response.getByBrokerage().get("TradeRepublic")).isEqualByComparingTo(new BigDecimal("100.00"));
+
+        assertThat(response.getByAssetType().get("INDEX_ETF")).isEqualByComparingTo(new BigDecimal("1000.00"));
+        assertThat(response.getByAssetType().get("STOCK")).isEqualByComparingTo(new BigDecimal("85.00"));
+        assertThat(response.getByAssetType().get("CRYPTO")).isEqualByComparingTo(new BigDecimal("100.00"));
+
+        // Positions sorted by value, largest first
+        assertThat(response.getPositions().get(0).getTicker()).isEqualTo("VWCE");
+    }
+
+    @Test
+    void getNetWorth_ShouldFallBackToTotalCost_WhenNoLatestPriceKnown() {
+        Investment noPrice = investment("XGLD", AssetType.COMMODITY, "Trading212", "5", null, null, Currency.EUR);
+        noPrice.setTotalCost(new BigDecimal("555.00"));
+        when(investmentRepository.findAll()).thenReturn(List.of(noPrice));
+
+        NetWorthResponse response = netWorthService.getNetWorth();
+
+        assertThat(response.getTotalValue()).isEqualByComparingTo(new BigDecimal("555.00"));
+    }
+
+    @Test
+    void getNetWorth_ShouldReturnZeroTotal_WhenNoInvestmentsExist() {
+        when(investmentRepository.findAll()).thenReturn(List.of());
+
+        NetWorthResponse response = netWorthService.getNetWorth();
+
+        assertThat(response.getTotalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(response.getPositions()).isEmpty();
+        assertThat(response.getByBrokerage()).isEmpty();
+    }
+}
