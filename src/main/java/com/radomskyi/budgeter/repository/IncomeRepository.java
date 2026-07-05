@@ -16,6 +16,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface IncomeRepository extends JpaRepository<Income, Long> {
 
+    // Check whether a transaction from a source system was already imported
+    boolean existsByExternalId(String externalId);
+
     // Find incomes by category
     List<Income> findByCategory(IncomeCategory category);
 

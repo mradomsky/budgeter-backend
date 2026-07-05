@@ -16,6 +16,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
+    // Check whether a transaction from a source system was already imported
+    boolean existsByExternalId(String externalId);
+
     // Find expenses by category
     List<Expense> findByCategory(ExpenseCategory category);
 

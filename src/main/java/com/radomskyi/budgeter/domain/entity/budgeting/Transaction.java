@@ -36,6 +36,16 @@ public abstract class Transaction {
     @Column(name = "description", length = 200)
     protected String description;
 
+    // Identifier from the source system (Trading212 ID, Trade Republic transaction_id,
+    // Finanzguru Buchungs-ID) — used to skip duplicates on re-import
+    @Column(name = "external_id", length = 100, unique = true)
+    protected String externalId;
+
+    // When the transaction actually happened at the source (booking date / trade time),
+    // as opposed to createdAt which is when the row was imported
+    @Column(name = "transaction_date")
+    protected LocalDateTime transactionDate;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     protected LocalDateTime createdAt;

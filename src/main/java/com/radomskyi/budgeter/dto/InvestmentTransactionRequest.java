@@ -1,5 +1,6 @@
 package com.radomskyi.budgeter.dto;
 
+import com.radomskyi.budgeter.domain.entity.investment.AssetType;
 import com.radomskyi.budgeter.domain.entity.investment.Currency;
 import com.radomskyi.budgeter.domain.entity.investment.InvestmentTransactionType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,7 +25,6 @@ public class InvestmentTransactionRequest {
     @Schema(description = "Type of investment transaction", example = "BUY")
     private InvestmentTransactionType transactionType;
 
-    @NotNull(message = "Asset ticker is required")
     @Size(max = 10, message = "Ticker must not exceed 10 characters")
     @Schema(description = "Asset ticker symbol", example = "AAPL", maxLength = 10)
     private String assetTicker;
@@ -71,4 +72,14 @@ public class InvestmentTransactionRequest {
     @Size(max = 100, message = "Brokerage name must not exceed 100 characters")
     @Schema(description = "Brokerage company", example = "Trading212", maxLength = 100)
     private String brokerage;
+
+    @Schema(description = "Type of the asset (defaults to STOCK when omitted)", example = "INDEX_ETF")
+    private AssetType assetType;
+
+    @Size(max = 100, message = "External id must not exceed 100 characters")
+    @Schema(description = "Identifier from the source system, used for import deduplication", maxLength = 100)
+    private String externalId;
+
+    @Schema(description = "When the transaction happened at the source", example = "2025-06-10T07:04:05")
+    private LocalDateTime transactionDate;
 }

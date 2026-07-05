@@ -53,6 +53,8 @@ public class InvestmentService implements InvestmentServiceInterface {
                 .exchangeRate(request.getExchangeRate())
                 .name(request.getName())
                 .description(request.getDescription())
+                .externalId(request.getExternalId())
+                .transactionDate(request.getTransactionDate())
                 .build();
 
         // Add transaction to investment (this updates all metrics)
@@ -178,7 +180,7 @@ public class InvestmentService implements InvestmentServiceInterface {
                     .ticker(request.getAssetTicker())
                     .name(request.getAssetName())
                     .isin(request.getAssetIsin())
-                    .assetType(AssetType.STOCK) // Default, could be improved with better detection logic
+                    .assetType(request.getAssetType() != null ? request.getAssetType() : AssetType.STOCK)
                     .investmentStyle(InvestmentStyle.GROWTH) // Default, could be improved
                     .build();
 

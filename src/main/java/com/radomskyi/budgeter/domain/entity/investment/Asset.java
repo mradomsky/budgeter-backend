@@ -19,8 +19,8 @@ public class Asset {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotNull
-    @Column(name = "ticker", nullable = false, length = 10)
+    // Nullable: Trade Republic exports identify securities by ISIN only
+    @Column(name = "ticker", length = 10)
     private String ticker;
 
     @NotNull
