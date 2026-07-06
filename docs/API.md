@@ -40,9 +40,9 @@ Create a new expense.
 {
   "amount": 45.99,
   "name": "Grocery run",
-  "category": "FOOD",
+  "category": "NEEDS",
   "description": "Weekly groceries",
-  "tags": ["ESSENTIAL", "RECURRING"]
+  "tags": ["FOOD"]
 }
 ```
 
@@ -52,9 +52,9 @@ Create a new expense.
   "id": 1,
   "amount": 45.99,
   "name": "Grocery run",
-  "category": "FOOD",
+  "category": "NEEDS",
   "description": "Weekly groceries",
-  "tags": ["ESSENTIAL", "RECURRING"],
+  "tags": ["FOOD"],
   "createdAt": "2026-06-13T10:00:00"
 }
 ```
@@ -89,7 +89,8 @@ Mirrors the Expense API under `/api/income`.
 
 All import endpoints accept `multipart/form-data` with a `file` field, are **idempotent**
 (re-importing the same export skips already-imported records via a per-source external id), and
-return a plain-text summary.
+return a plain-text summary. Each row is persisted in its own transaction: a row that fails to
+parse or persist is counted in `failedRows` and does not abort the rest of the import.
 
 **Response `200 OK`** (example):
 ```
