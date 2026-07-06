@@ -22,7 +22,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -63,7 +62,8 @@ public class Trading212ImportService {
     private final InvestmentService investmentService;
     private final InvestmentTransactionRepository investmentTransactionRepository;
 
-    @Transactional
+    // Intentionally not @Transactional: each row commits via InvestmentService.create's own
+    // transaction, so one bad row cannot poison the session and fail the whole import.
     public ImportResult importCsv(MultipartFile file) throws IOException, CsvException {
         log.info("Starting Trading212 CSV import for file: {}", file.getOriginalFilename());
 

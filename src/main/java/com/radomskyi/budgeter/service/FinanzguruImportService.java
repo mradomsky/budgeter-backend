@@ -26,7 +26,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -136,7 +135,8 @@ public class FinanzguruImportService {
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
 
-    @Transactional
+    // Intentionally not @Transactional: each row commits via the repository's own transaction,
+    // so one bad row cannot poison the session and fail the whole import.
     public ImportResult importXlsx(MultipartFile file) throws IOException {
         log.info("Starting Finanzguru XLSX import for file: {}", file.getOriginalFilename());
 
