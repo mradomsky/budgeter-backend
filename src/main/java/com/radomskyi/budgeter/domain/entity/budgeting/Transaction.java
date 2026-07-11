@@ -46,6 +46,12 @@ public abstract class Transaction {
     @Column(name = "transaction_date")
     protected LocalDateTime transactionDate;
 
+    // Which bank/cash account the money moved to/from. Nullable: manual entries and rows
+    // imported before this field existed have no account attached.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    protected Account account;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     protected LocalDateTime createdAt;

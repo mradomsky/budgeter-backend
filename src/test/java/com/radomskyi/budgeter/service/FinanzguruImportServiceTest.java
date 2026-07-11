@@ -5,12 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Expense;
 import com.radomskyi.budgeter.domain.entity.budgeting.ExpenseCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Income;
 import com.radomskyi.budgeter.domain.entity.budgeting.IncomeCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Tag;
 import com.radomskyi.budgeter.dto.ImportResult;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.ExpenseRepository;
 import com.radomskyi.budgeter.repository.IncomeRepository;
 import java.io.ByteArrayOutputStream;
@@ -18,6 +20,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CreationHelper;
@@ -37,7 +40,11 @@ class FinanzguruImportServiceTest {
 
     private static final String[] HEADERS = {
         "Buchungstag",
+        "Referenzkonto",
+        "Name Referenzkonto",
         "Betrag",
+        "Kontostand",
+        "Waehrung",
         "Beguenstigter/Auftraggeber",
         "Verwendungszweck",
         "Analyse-Hauptkategorie",
@@ -53,11 +60,15 @@ class FinanzguruImportServiceTest {
     @Mock
     private IncomeRepository incomeRepository;
 
+    @Mock
+    private AccountRepository accountRepository;
+
     @InjectMocks
     private FinanzguruImportService importService;
 
-    /** Builds an in-memory Finanzguru-style XLSX. Each row: date, amount, counterparty, purpose,
-     * main category, sub category, contract, transfer, booking id. */
+    /** Builds an in-memory Finanzguru-style XLSX. Each row: date, account IBAN, account name,
+     * amount, balance, currency, counterparty, purpose, main category, sub category, contract,
+     * transfer, booking id. */
     private MockMultipartFile xlsxFile(Object[][] rows) throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Buchungen");
@@ -104,7 +115,11 @@ class FinanzguruImportServiceTest {
         MockMultipartFile file = xlsxFile(new Object[][] {
             {
                 LocalDate.of(2024, 8, 12),
+                "DE05380700240067051300",
+                "Persoenliches Konto",
                 -21.43,
+                5659.22,
+                "EUR",
                 "Kaufland",
                 "KAUFLAND KOELN",
                 "Essen & Trinken",
@@ -116,6 +131,7 @@ class FinanzguruImportServiceTest {
         });
 
         when(expenseRepository.existsByExternalId(anyString())).thenReturn(false);
+        when(accountRepository.findByExternalId(anyString())).thenReturn(Optional.empty());
 
         ImportResult result = importService.importXlsx(file);
 
@@ -132,6 +148,15 @@ class FinanzguruImportServiceTest {
         assertThat(expense.getExternalId()).isEqualTo("booking-1");
         assertThat(expense.getTransactionDate()).isEqualTo(LocalDateTime.of(2024, 8, 12, 0, 0));
         verify(incomeRepository, never()).save(any());
+
+        ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
+        verify(accountRepository).save(accountCaptor.capture());
+        Account account = accountCaptor.getValue();
+        assertThat(account.getExternalId()).isEqualTo("DE05380700240067051300");
+        assertThat(account.getName()).isEqualTo("Persoenliches Konto");
+        assertThat(account.getBalance()).isEqualByComparingTo(new BigDecimal("5659.22"));
+        assertThat(account.getCurrency()).isEqualTo("EUR");
+        assertThat(account.getBalanceAsOf()).isEqualTo(LocalDateTime.of(2024, 8, 12, 0, 0));
     }
 
     @Test
@@ -139,7 +164,11 @@ class FinanzguruImportServiceTest {
         MockMultipartFile file = xlsxFile(new Object[][] {
             {
                 LocalDate.of(2024, 8, 28),
+                null,
+                null,
                 3200.00,
+                null,
+                null,
                 "Arbeitgeber GmbH",
                 "Gehalt August",
                 "Einnahmen",
@@ -172,7 +201,11 @@ class FinanzguruImportServiceTest {
             // Transfer between own accounts
             {
                 LocalDate.of(2024, 8, 1),
+                null,
+                null,
                 -500.00,
+                null,
+                null,
                 "Eigenes Konto",
                 "Umbuchung",
                 "Sonstiges",
@@ -184,7 +217,11 @@ class FinanzguruImportServiceTest {
             // Transfer to brokerage — covered by investment imports
             {
                 LocalDate.of(2024, 8, 2),
+                null,
+                null,
                 -300.00,
+                null,
+                null,
                 "Trading 212",
                 "Einzahlung",
                 "Sparen",
@@ -194,7 +231,21 @@ class FinanzguruImportServiceTest {
                 "b-2"
             },
             // Zero amount
-            {LocalDate.of(2024, 8, 3), 0.00, "Test", "Nichts", "Sonstiges", "Sonstige Ausgaben", "nein", "nein", "b-3"}
+            {
+                LocalDate.of(2024, 8, 3),
+                null,
+                null,
+                0.00,
+                null,
+                null,
+                "Test",
+                "Nichts",
+                "Sonstiges",
+                "Sonstige Ausgaben",
+                "nein",
+                "nein",
+                "b-3"
+            }
         });
 
         ImportResult result = importService.importXlsx(file);
@@ -210,7 +261,11 @@ class FinanzguruImportServiceTest {
         MockMultipartFile file = xlsxFile(new Object[][] {
             {
                 LocalDate.of(2024, 8, 12),
+                null,
+                null,
                 -21.43,
+                null,
+                null,
                 "Kaufland",
                 "KAUFLAND KOELN",
                 "Essen & Trinken",
@@ -234,13 +289,45 @@ class FinanzguruImportServiceTest {
     void importXlsx_ShouldMapContractToFixed_WhenAnalyseVertragIsJa() throws IOException {
         MockMultipartFile file = xlsxFile(new Object[][] {
             // Electricity bill with contract flag → FIXED + UTILITIES
-            {LocalDate.of(2024, 8, 12), -75.00, "MONTANA", "Strom Abschlag", "Wohnen", "Strom", "ja", "nein", "b-1"},
+            {
+                LocalDate.of(2024, 8, 12),
+                null,
+                null,
+                -75.00,
+                null,
+                null,
+                "MONTANA",
+                "Strom Abschlag",
+                "Wohnen",
+                "Strom",
+                "ja",
+                "nein",
+                "b-1"
+            },
             // Gym membership contract → FIXED via contract flag (Freizeit alone would be WANTS)
-            {LocalDate.of(2024, 8, 13), -29.99, "FitX", "Mitgliedschaft", "Freizeit", "Sport", "ja", "nein", "b-2"},
+            {
+                LocalDate.of(2024, 8, 13),
+                null,
+                null,
+                -29.99,
+                null,
+                null,
+                "FitX",
+                "Mitgliedschaft",
+                "Freizeit",
+                "Sport",
+                "ja",
+                "nein",
+                "b-2"
+            },
             // Restaurant stays WANTS even though category default differs
             {
                 LocalDate.of(2024, 8, 14),
+                null,
+                null,
                 -45.00,
+                null,
+                null,
                 "Vapiano",
                 "Essen",
                 "Essen & Trinken",
@@ -271,7 +358,11 @@ class FinanzguruImportServiceTest {
         MockMultipartFile file = xlsxFile(new Object[][] {
             {
                 LocalDate.of(2024, 9, 1),
+                null,
+                null,
                 12.50,
+                null,
+                null,
                 "Vapiano",
                 "Erstattung",
                 "Essen & Trinken",
@@ -289,5 +380,72 @@ class FinanzguruImportServiceTest {
         ArgumentCaptor<Income> captor = ArgumentCaptor.forClass(Income.class);
         verify(incomeRepository).save(captor.capture());
         assertThat(captor.getValue().getCategory()).isEqualTo(IncomeCategory.OTHER_INCOME);
+    }
+
+    @Test
+    void importXlsx_ShouldLinkExpenseToAccount_WhenAccountResolved() throws IOException {
+        MockMultipartFile file = xlsxFile(new Object[][] {
+            {
+                LocalDate.of(2024, 8, 12),
+                "DE05380700240067051300",
+                "Persoenliches Konto",
+                -21.43,
+                5659.22,
+                "EUR",
+                "Kaufland",
+                "KAUFLAND KOELN",
+                "Essen & Trinken",
+                "Lebensmittel",
+                "nein",
+                "nein",
+                "booking-1"
+            }
+        });
+
+        when(expenseRepository.existsByExternalId(anyString())).thenReturn(false);
+        when(accountRepository.findByExternalId(anyString())).thenReturn(Optional.empty());
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        importService.importXlsx(file);
+
+        ArgumentCaptor<Expense> captor = ArgumentCaptor.forClass(Expense.class);
+        verify(expenseRepository).save(captor.capture());
+        assertThat(captor.getValue().getAccount()).isNotNull();
+        assertThat(captor.getValue().getAccount().getExternalId()).isEqualTo("DE05380700240067051300");
+    }
+
+    @Test
+    void importXlsx_ShouldNotRollBackBalance_WhenRowIsOlderThanStoredSnapshot() throws IOException {
+        MockMultipartFile file = xlsxFile(new Object[][] {
+            {
+                LocalDate.of(2024, 8, 1),
+                "DE05380700240067051300",
+                "Persoenliches Konto",
+                -10.00,
+                4000.00,
+                "EUR",
+                "Kaufland",
+                "KAUFLAND KOELN",
+                "Essen & Trinken",
+                "Lebensmittel",
+                "nein",
+                "nein",
+                "booking-old"
+            }
+        });
+
+        Account existing = Account.builder()
+                .externalId("DE05380700240067051300")
+                .name("Persoenliches Konto")
+                .balance(new BigDecimal("5000.00"))
+                .currency("EUR")
+                .balanceAsOf(LocalDateTime.of(2024, 8, 12, 0, 0))
+                .build();
+        when(accountRepository.findByExternalId("DE05380700240067051300")).thenReturn(Optional.of(existing));
+        when(expenseRepository.existsByExternalId(anyString())).thenReturn(false);
+
+        importService.importXlsx(file);
+
+        verify(accountRepository, never()).save(any());
     }
 }

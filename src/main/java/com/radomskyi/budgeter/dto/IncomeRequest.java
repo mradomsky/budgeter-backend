@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,4 +40,12 @@ public class IncomeRequest {
 
     @Schema(description = "List of tags associated with the income")
     private List<Tag> tags;
+
+    @Schema(description = "Id of the account the money was added to, if known", example = "1")
+    private Long accountId;
+
+    @Schema(
+            description = "When the income was actually booked, if different from today",
+            example = "2026-06-10T00:00:00")
+    private LocalDateTime transactionDate;
 }

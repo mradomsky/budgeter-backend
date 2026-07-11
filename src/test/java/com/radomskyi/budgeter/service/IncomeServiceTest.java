@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Income;
 import com.radomskyi.budgeter.domain.entity.budgeting.IncomeCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Tag;
 import com.radomskyi.budgeter.dto.IncomeRequest;
 import com.radomskyi.budgeter.dto.IncomeResponse;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.IncomeRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +36,9 @@ class IncomeServiceTest {
 
     @Mock
     private IncomeRepository incomeRepository;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @InjectMocks
     private IncomeService incomeService;
@@ -194,6 +199,61 @@ class IncomeServiceTest {
                 .hasMessageContaining("Income not found with id: 999");
 
         verify(incomeRepository).findById(999L);
+        verify(incomeRepository, never()).save(any(Income.class));
+    }
+
+    @Test
+    void create_ShouldLinkAccount_WhenAccountIdProvided() {
+        // Given
+        Account account = Account.builder()
+                .id(5L)
+                .externalId("DE05")
+                .name("Main Account")
+                .balance(BigDecimal.TEN)
+                .currency("EUR")
+                .build();
+        IncomeRequest requestWithAccount = IncomeRequest.builder()
+                .amount(new BigDecimal("3500.00"))
+                .name("Salary")
+                .category(IncomeCategory.SALARY)
+                .accountId(5L)
+                .build();
+        Income savedIncome = Income.builder()
+                .id(1L)
+                .amount(new BigDecimal("3500.00"))
+                .name("Salary")
+                .category(IncomeCategory.SALARY)
+                .account(account)
+                .build();
+
+        when(accountRepository.findById(5L)).thenReturn(Optional.of(account));
+        when(incomeRepository.save(any(Income.class))).thenReturn(savedIncome);
+
+        // When
+        IncomeResponse result = incomeService.create(requestWithAccount);
+
+        // Then
+        assertThat(result.getAccountId()).isEqualTo(5L);
+        assertThat(result.getAccountName()).isEqualTo("Main Account");
+    }
+
+    @Test
+    void create_ShouldThrowException_WhenAccountIdDoesNotExist() {
+        // Given
+        IncomeRequest requestWithAccount = IncomeRequest.builder()
+                .amount(new BigDecimal("3500.00"))
+                .name("Salary")
+                .category(IncomeCategory.SALARY)
+                .accountId(999L)
+                .build();
+
+        when(accountRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> incomeService.create(requestWithAccount))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Account not found with id: 999");
+
         verify(incomeRepository, never()).save(any(Income.class));
     }
 

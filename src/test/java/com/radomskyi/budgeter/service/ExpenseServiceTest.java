@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Expense;
 import com.radomskyi.budgeter.domain.entity.budgeting.ExpenseCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Tag;
 import com.radomskyi.budgeter.dto.ExpenseRequest;
 import com.radomskyi.budgeter.dto.ExpenseResponse;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.ExpenseRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,6 +35,9 @@ class ExpenseServiceTest {
 
     @Mock
     private ExpenseRepository expenseRepository;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @InjectMocks
     private ExpenseService expenseService;
@@ -188,6 +193,61 @@ class ExpenseServiceTest {
                 .hasMessage("Expense not found with id: 999");
 
         verify(expenseRepository).findById(999L);
+        verify(expenseRepository, never()).save(any(Expense.class));
+    }
+
+    @Test
+    void create_ShouldLinkAccount_WhenAccountIdProvided() {
+        // Given
+        Account account = Account.builder()
+                .id(5L)
+                .externalId("DE05")
+                .name("Bargeld")
+                .balance(BigDecimal.TEN)
+                .currency("EUR")
+                .build();
+        ExpenseRequest requestWithAccount = ExpenseRequest.builder()
+                .amount(new BigDecimal("25.50"))
+                .name("Test Expense")
+                .category(ExpenseCategory.WANTS)
+                .accountId(5L)
+                .build();
+        Expense savedExpense = Expense.builder()
+                .id(1L)
+                .amount(new BigDecimal("25.50"))
+                .name("Test Expense")
+                .category(ExpenseCategory.WANTS)
+                .account(account)
+                .build();
+
+        when(accountRepository.findById(5L)).thenReturn(Optional.of(account));
+        when(expenseRepository.save(any(Expense.class))).thenReturn(savedExpense);
+
+        // When
+        ExpenseResponse result = expenseService.create(requestWithAccount);
+
+        // Then
+        assertThat(result.getAccountId()).isEqualTo(5L);
+        assertThat(result.getAccountName()).isEqualTo("Bargeld");
+    }
+
+    @Test
+    void create_ShouldThrowException_WhenAccountIdDoesNotExist() {
+        // Given
+        ExpenseRequest requestWithAccount = ExpenseRequest.builder()
+                .amount(new BigDecimal("25.50"))
+                .name("Test Expense")
+                .category(ExpenseCategory.WANTS)
+                .accountId(999L)
+                .build();
+
+        when(accountRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> expenseService.create(requestWithAccount))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Account not found with id: 999");
+
         verify(expenseRepository, never()).save(any(Expense.class));
     }
 

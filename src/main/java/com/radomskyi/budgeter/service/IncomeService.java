@@ -1,11 +1,15 @@
 package com.radomskyi.budgeter.service;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Income;
 import com.radomskyi.budgeter.domain.service.IncomeServiceInterface;
 import com.radomskyi.budgeter.dto.IncomeRequest;
 import com.radomskyi.budgeter.dto.IncomeResponse;
+import com.radomskyi.budgeter.exception.AccountNotFoundException;
 import com.radomskyi.budgeter.exception.IncomeNotFoundException;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.IncomeRepository;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class IncomeService implements IncomeServiceInterface {
 
     private final IncomeRepository incomeRepository;
+    private final AccountRepository accountRepository;
 
     /** Create a new income */
     @Override
@@ -33,6 +38,9 @@ public class IncomeService implements IncomeServiceInterface {
                 .category(request.getCategory())
                 .description(request.getDescription())
                 .tags(request.getTags())
+                .account(resolveAccount(request.getAccountId()))
+                .transactionDate(
+                        request.getTransactionDate() != null ? request.getTransactionDate() : LocalDateTime.now())
                 .build();
 
         Income savedIncome = incomeRepository.save(income);
@@ -77,6 +85,10 @@ public class IncomeService implements IncomeServiceInterface {
         existingIncome.setCategory(request.getCategory());
         existingIncome.setDescription(request.getDescription());
         existingIncome.setTags(request.getTags());
+        existingIncome.setAccount(resolveAccount(request.getAccountId()));
+        if (request.getTransactionDate() != null) {
+            existingIncome.setTransactionDate(request.getTransactionDate());
+        }
 
         Income updatedIncome = incomeRepository.save(existingIncome);
         log.info("Successfully updated income with id: {}", updatedIncome.getId());
@@ -98,8 +110,19 @@ public class IncomeService implements IncomeServiceInterface {
         log.info("Successfully deleted income with id: {}", id);
     }
 
+    /** Resolve an optional account id to an Account, throwing if it doesn't exist */
+    private Account resolveAccount(Long accountId) {
+        if (accountId == null) {
+            return null;
+        }
+        return accountRepository
+                .findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
+    }
+
     /** Map Income entity to IncomeResponse DTO */
     private IncomeResponse mapToResponse(Income income) {
+        Account account = income.getAccount();
         return IncomeResponse.builder()
                 .id(income.getId())
                 .name(income.getName())
@@ -107,6 +130,10 @@ public class IncomeService implements IncomeServiceInterface {
                 .category(income.getCategory())
                 .description(income.getDescription())
                 .tags(income.getTags())
+                .accountId(account != null ? account.getId() : null)
+                .accountName(account != null ? account.getName() : null)
+                .transactionDate(
+                        income.getTransactionDate() != null ? income.getTransactionDate() : income.getCreatedAt())
                 .createdAt(income.getCreatedAt())
                 .updatedAt(income.getUpdatedAt())
                 .build();
