@@ -1,11 +1,13 @@
 package com.radomskyi.budgeter.service;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Expense;
 import com.radomskyi.budgeter.domain.entity.budgeting.ExpenseCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Income;
 import com.radomskyi.budgeter.domain.entity.budgeting.IncomeCategory;
 import com.radomskyi.budgeter.domain.entity.budgeting.Tag;
 import com.radomskyi.budgeter.dto.ImportResult;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.ExpenseRepository;
 import com.radomskyi.budgeter.repository.IncomeRepository;
 import java.io.IOException;
@@ -48,6 +50,10 @@ public class FinanzguruImportService {
     private static final String COL_CONTRACT = "Analyse-Vertrag";
     private static final String COL_TRANSFER = "Analyse-Umbuchung";
     private static final String COL_BOOKING_ID = "Buchungs-ID";
+    private static final String COL_ACCOUNT_ID = "Referenzkonto";
+    private static final String COL_ACCOUNT_NAME = "Name Referenzkonto";
+    private static final String COL_BALANCE = "Kontostand";
+    private static final String COL_CURRENCY = "Waehrung";
 
     private static final String MAIN_CATEGORY_SAVINGS = "Sparen";
     private static final String MAIN_CATEGORY_INCOME = "Einnahmen";
@@ -134,6 +140,7 @@ public class FinanzguruImportService {
 
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
+    private final AccountRepository accountRepository;
 
     // Intentionally not @Transactional: each row commits via the repository's own transaction,
     // so one bad row cannot poison the session and fail the whole import.
@@ -193,6 +200,9 @@ public class FinanzguruImportService {
             return;
         }
 
+        LocalDateTime bookingDateForBalance = dateValue(row, columns.get(COL_DATE));
+        Account account = updateAccountBalance(row, columns, formatter, bookingDateForBalance);
+
         String mainCategory = stringValue(row, columns.get(COL_MAIN_CATEGORY), formatter);
         boolean isTransfer = "ja".equalsIgnoreCase(stringValue(row, columns.get(COL_TRANSFER), formatter));
         if (isTransfer || MAIN_CATEGORY_SAVINGS.equals(mainCategory)) {
@@ -209,7 +219,7 @@ public class FinanzguruImportService {
         String subCategory = stringValue(row, columns.get(COL_SUB_CATEGORY), formatter);
         String counterparty = stringValue(row, columns.get(COL_COUNTERPARTY), formatter);
         String purpose = stringValue(row, columns.get(COL_PURPOSE), formatter);
-        LocalDateTime bookingDate = dateValue(row, columns.get(COL_DATE));
+        LocalDateTime bookingDate = bookingDateForBalance;
         boolean isContract = "ja".equalsIgnoreCase(stringValue(row, columns.get(COL_CONTRACT), formatter));
 
         String name =
@@ -229,6 +239,7 @@ public class FinanzguruImportService {
                     .tags(List.of(mapTag(mainCategory, subCategory)))
                     .externalId(externalId)
                     .transactionDate(bookingDate)
+                    .account(account)
                     .build();
             expenseRepository.save(expense);
         } else {
@@ -243,10 +254,48 @@ public class FinanzguruImportService {
                     .category(mapIncomeCategory(mainCategory, subCategory))
                     .externalId(externalId)
                     .transactionDate(bookingDate)
+                    .account(account)
                     .build();
             incomeRepository.save(income);
         }
         result.incrementImported();
+    }
+
+    // Balance tracking is independent of expense/income categorization: every row with a
+    // Kontostand reading updates the account, including transfers and savings movements skipped
+    // above, since those still change the actual bank balance. Returns the resolved account so
+    // the caller can link the expense/income it creates to it, regardless of whether the balance
+    // itself was refreshed.
+    private Account updateAccountBalance(
+            Row row, Map<String, Integer> columns, DataFormatter formatter, LocalDateTime bookingDate) {
+        String externalId = stringValue(row, columns.get(COL_ACCOUNT_ID), formatter);
+        if (externalId == null) {
+            return null;
+        }
+
+        Account account = accountRepository.findByExternalId(externalId).orElse(null);
+        BigDecimal balance = numericValue(row, columns.get(COL_BALANCE));
+        boolean isStaleSnapshot = account != null
+                && account.getBalanceAsOf() != null
+                && bookingDate != null
+                && bookingDate.isBefore(account.getBalanceAsOf());
+        if (balance == null || isStaleSnapshot) {
+            // No balance on this row, or an older snapshot than what we already have — don't
+            // roll the balance backwards, but still return the account for linking
+            return account;
+        }
+
+        String name = stringValue(row, columns.get(COL_ACCOUNT_NAME), formatter);
+        String currency = stringValue(row, columns.get(COL_CURRENCY), formatter);
+
+        if (account == null) {
+            account = Account.builder().externalId(externalId).build();
+        }
+        account.setName(name != null ? name : externalId);
+        account.setBalance(balance);
+        account.setCurrency(currency != null ? currency : "EUR");
+        account.setBalanceAsOf(bookingDate);
+        return accountRepository.save(account);
     }
 
     private ExpenseCategory mapExpenseCategory(String mainCategory, String subCategory, boolean isContract) {

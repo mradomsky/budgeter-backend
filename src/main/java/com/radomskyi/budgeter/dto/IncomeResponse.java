@@ -36,6 +36,15 @@ public class IncomeResponse {
     @Schema(description = "List of tags associated with the income")
     private List<Tag> tags;
 
+    @Schema(description = "Id of the account the money was added to, if known", example = "1")
+    private Long accountId;
+
+    @Schema(description = "Name of the account the money was added to, if known", example = "Bargeld")
+    private String accountName;
+
+    @Schema(description = "When the income was actually booked (falls back to createdAt if unknown)")
+    private LocalDateTime transactionDate;
+
     @Schema(description = "Date and time when the income was created")
     private LocalDateTime createdAt;
 

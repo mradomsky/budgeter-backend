@@ -36,6 +36,15 @@ public class ExpenseResponse {
     @Schema(description = "List of tags associated with the expense")
     private List<Tag> tags;
 
+    @Schema(description = "Id of the account the money was taken from, if known", example = "1")
+    private Long accountId;
+
+    @Schema(description = "Name of the account the money was taken from, if known", example = "Bargeld")
+    private String accountName;
+
+    @Schema(description = "When the expense was actually booked (falls back to createdAt if unknown)")
+    private LocalDateTime transactionDate;
+
     @Schema(description = "Date and time when the expense was created")
     private LocalDateTime createdAt;
 

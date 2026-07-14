@@ -1,11 +1,15 @@
 package com.radomskyi.budgeter.service;
 
+import com.radomskyi.budgeter.domain.entity.budgeting.Account;
 import com.radomskyi.budgeter.domain.entity.budgeting.Expense;
 import com.radomskyi.budgeter.domain.service.ExpenseServiceInterface;
 import com.radomskyi.budgeter.dto.ExpenseRequest;
 import com.radomskyi.budgeter.dto.ExpenseResponse;
+import com.radomskyi.budgeter.exception.AccountNotFoundException;
 import com.radomskyi.budgeter.exception.ExpenseNotFoundException;
+import com.radomskyi.budgeter.repository.AccountRepository;
 import com.radomskyi.budgeter.repository.ExpenseRepository;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ExpenseService implements ExpenseServiceInterface {
 
     private final ExpenseRepository expenseRepository;
+    private final AccountRepository accountRepository;
 
     /** Create a new expense */
     @Override
@@ -33,6 +38,9 @@ public class ExpenseService implements ExpenseServiceInterface {
                 .category(request.getCategory())
                 .description(request.getDescription())
                 .tags(request.getTags())
+                .account(resolveAccount(request.getAccountId()))
+                .transactionDate(
+                        request.getTransactionDate() != null ? request.getTransactionDate() : LocalDateTime.now())
                 .build();
 
         Expense savedExpense = expenseRepository.save(expense);
@@ -77,6 +85,10 @@ public class ExpenseService implements ExpenseServiceInterface {
         existingExpense.setCategory(request.getCategory());
         existingExpense.setDescription(request.getDescription());
         existingExpense.setTags(request.getTags());
+        existingExpense.setAccount(resolveAccount(request.getAccountId()));
+        if (request.getTransactionDate() != null) {
+            existingExpense.setTransactionDate(request.getTransactionDate());
+        }
 
         Expense updatedExpense = expenseRepository.save(existingExpense);
         log.info("Successfully updated expense with id: {}", updatedExpense.getId());
@@ -98,8 +110,19 @@ public class ExpenseService implements ExpenseServiceInterface {
         log.info("Successfully deleted expense with id: {}", id);
     }
 
+    /** Resolve an optional account id to an Account, throwing if it doesn't exist */
+    private Account resolveAccount(Long accountId) {
+        if (accountId == null) {
+            return null;
+        }
+        return accountRepository
+                .findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
+    }
+
     /** Map Expense entity to ExpenseResponse DTO */
     private ExpenseResponse mapToResponse(Expense expense) {
+        Account account = expense.getAccount();
         return ExpenseResponse.builder()
                 .id(expense.getId())
                 .name(expense.getName())
@@ -107,6 +130,10 @@ public class ExpenseService implements ExpenseServiceInterface {
                 .category(expense.getCategory())
                 .description(expense.getDescription())
                 .tags(expense.getTags())
+                .accountId(account != null ? account.getId() : null)
+                .accountName(account != null ? account.getName() : null)
+                .transactionDate(
+                        expense.getTransactionDate() != null ? expense.getTransactionDate() : expense.getCreatedAt())
                 .createdAt(expense.getCreatedAt())
                 .updatedAt(expense.getUpdatedAt())
                 .build();
