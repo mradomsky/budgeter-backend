@@ -1,17 +1,26 @@
 package com.radomskyi.budgeter.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.radomskyi.budgeter.domain.entity.investment.Asset;
+import com.radomskyi.budgeter.domain.entity.investment.AssetPrice;
 import com.radomskyi.budgeter.domain.entity.investment.AssetType;
 import com.radomskyi.budgeter.domain.entity.investment.Currency;
+import com.radomskyi.budgeter.domain.entity.investment.FxRate;
 import com.radomskyi.budgeter.domain.entity.investment.Investment;
 import com.radomskyi.budgeter.domain.entity.investment.InvestmentStyle;
 import com.radomskyi.budgeter.dto.NetWorthResponse;
+import com.radomskyi.budgeter.repository.AssetPriceRepository;
+import com.radomskyi.budgeter.repository.FxRateRepository;
 import com.radomskyi.budgeter.repository.InvestmentRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,8 +33,23 @@ class NetWorthServiceTest {
     @Mock
     private InvestmentRepository investmentRepository;
 
+    @Mock
+    private AssetPriceRepository assetPriceRepository;
+
+    @Mock
+    private FxRateRepository fxRateRepository;
+
     @InjectMocks
     private NetWorthService netWorthService;
+
+    @BeforeEach
+    void setUp() {
+        // No synced market data by default — positions valued from the last trade
+        lenient()
+                .when(assetPriceRepository.findFirstByAssetIdAndPriceDateLessThanEqualOrderByPriceDateDesc(
+                        any(), any()))
+                .thenReturn(Optional.empty());
+    }
 
     private Investment investment(
             String ticker,
@@ -92,6 +116,53 @@ class NetWorthServiceTest {
         NetWorthResponse response = netWorthService.getNetWorth();
 
         assertThat(response.getTotalValue()).isEqualByComparingTo(new BigDecimal("555.00"));
+    }
+
+    @Test
+    void getNetWorth_ShouldPreferSyncedPrice_WhenAvailable() {
+        Investment vwce = investment("VWCE", AssetType.INDEX_ETF, "Trading212", "10", "100.00", null, Currency.EUR);
+        vwce.getAsset().setId(11L);
+        when(investmentRepository.findAll()).thenReturn(List.of(vwce));
+        when(assetPriceRepository.findFirstByAssetIdAndPriceDateLessThanEqualOrderByPriceDateDesc(any(), any()))
+                .thenReturn(Optional.of(AssetPrice.builder()
+                        .asset(vwce.getAsset())
+                        .priceDate(LocalDate.now().minusDays(1))
+                        .close(new BigDecimal("110.00"))
+                        .currency(Currency.EUR)
+                        .source("TEST")
+                        .build()));
+
+        NetWorthResponse response = netWorthService.getNetWorth();
+
+        // 10 × synced 110 = 1100, not 10 × trade 100
+        assertThat(response.getTotalValue()).isEqualByComparingTo(new BigDecimal("1100.00"));
+        assertThat(response.getPositions().get(0).getLatestPrice()).isEqualByComparingTo(new BigDecimal("110.00"));
+    }
+
+    @Test
+    void getNetWorth_ShouldConvertSyncedPriceWithFxRate_WhenNotEur() {
+        Investment aapl = investment("AAPL", AssetType.STOCK, "Trading212", "2", "50.00", "0.85", Currency.USD);
+        aapl.getAsset().setId(12L);
+        when(investmentRepository.findAll()).thenReturn(List.of(aapl));
+        when(assetPriceRepository.findFirstByAssetIdAndPriceDateLessThanEqualOrderByPriceDateDesc(any(), any()))
+                .thenReturn(Optional.of(AssetPrice.builder()
+                        .asset(aapl.getAsset())
+                        .priceDate(LocalDate.now().minusDays(1))
+                        .close(new BigDecimal("60.00"))
+                        .currency(Currency.USD)
+                        .source("TEST")
+                        .build()));
+        when(fxRateRepository.findFirstByCurrencyAndRateDateLessThanEqualOrderByRateDateDesc(any(), any()))
+                .thenReturn(Optional.of(FxRate.builder()
+                        .rateDate(LocalDate.now().minusDays(1))
+                        .currency(Currency.USD)
+                        .rateToEur(new BigDecimal("0.9"))
+                        .build()));
+
+        NetWorthResponse response = netWorthService.getNetWorth();
+
+        // 2 × 60 USD × 0.9 = 108 EUR
+        assertThat(response.getTotalValue()).isEqualByComparingTo(new BigDecimal("108.00"));
     }
 
     @Test

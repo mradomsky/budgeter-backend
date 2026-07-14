@@ -30,6 +30,11 @@ public class Asset {
     @Column(name = "isin", length = 12)
     private String isin;
 
+    // Symbol used by the market data provider (e.g. "VUSA.LSE"). Resolved once from
+    // ticker/ISIN by the price sync and cached here; may be set manually as an override.
+    @Column(name = "price_symbol", length = 20)
+    private String priceSymbol;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "asset_type", nullable = false, length = 20)

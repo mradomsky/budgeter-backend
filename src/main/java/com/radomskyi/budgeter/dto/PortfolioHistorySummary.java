@@ -36,4 +36,15 @@ public class PortfolioHistorySummary {
             description = "Lifetime total return percentage: (unrealized + realized + dividends)"
                     + " over everything ever paid for buys. Null when there were no buys")
     private BigDecimal totalReturnPct;
+
+    @Schema(
+            description = "Annualized Sharpe ratio (risk-free rate 0) of time-weighted daily returns."
+                    + " Null until enough synced market prices exist (>= 30 priced days)")
+    private BigDecimal sharpe;
+
+    @Schema(description = "Annualized volatility of time-weighted daily returns, percent. Null like sharpe")
+    private BigDecimal volatilityPct;
+
+    @Schema(description = "Maximum peak-to-trough decline of portfolio value, percent. Null like sharpe")
+    private BigDecimal maxDrawdownPct;
 }

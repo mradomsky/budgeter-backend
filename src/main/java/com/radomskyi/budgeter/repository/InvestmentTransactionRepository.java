@@ -103,8 +103,8 @@ public interface InvestmentTransactionRepository extends JpaRepository<Investmen
     // Count transactions by type for reporting
     long countByTransactionType(InvestmentTransactionType transactionType);
 
-    // Load every transaction with its investment eagerly, for portfolio history replay
-    @Query("SELECT it FROM InvestmentTransaction it JOIN FETCH it.investment")
+    // Load every transaction with its investment and asset eagerly, for portfolio history replay
+    @Query("SELECT it FROM InvestmentTransaction it JOIN FETCH it.investment i JOIN FETCH i.asset")
     List<InvestmentTransaction> findAllWithInvestment();
 
     // Find transactions ordered by creation date (newest first)
